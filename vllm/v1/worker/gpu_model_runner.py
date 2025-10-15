@@ -2487,54 +2487,6 @@ class GPUModelRunner(LoRAModelRunnerMixin, KVConnectorModelRunnerMixin):
             record_function_or_nullcontext("Forward"),
             self.maybe_get_kv_connector_output(scheduler_output) as kv_connector_output,
         ):
-            # Debug print: summarize forward context and attention metadata
-            try:
-                from vllm.forward_context import get_forward_context
-                fc = get_forward_context()
-                def _summarize_attn_metadata(meta: Any) -> dict[str, Any]:
-                    # handle dict or single metadata
-                    def one(m: Any) -> dict[str, Any]:
-                        out = {}
-                        for name in (
-                            "num_actual_tokens",
-                            "max_query_len",
-                            "max_seq_len",
-                            "use_cascade",
-                            "common_prefix_len",
-                        ):
-                            if hasattr(m, name):
-                                out[name] = getattr(m, name)
-                        for tname in (
-                            "query_start_loc",
-                            "seq_lens",
-                            "block_table",
-                            "slot_mapping",
-                            "cu_prefix_query_lens",
-                            "prefix_kv_lens",
-                            "suffix_kv_lens",
-                        ):
-                            if hasattr(m, tname) and getattr(m, tname) is not None:
-                                t = getattr(m, tname)
-                                out[f"{tname}.shape"] = tuple(t.shape)
-                                out[f"{tname}.dtype"] = str(t.dtype)
-                                out[f"{tname}.device"] = str(t.device)
-                        return out
-                    if isinstance(meta, dict):
-                        return {k: one(v) for k, v in meta.items()}
-                    elif isinstance(meta, list):
-                        return {f"ubatch_{i}": _summarize_attn_metadata(v) for i, v in enumerate(meta)}
-                    else:
-                        return {"single": one(meta)}
-
-                ctx_summary = {
-                    "num_tokens": fc.batch_descriptor.num_tokens if fc.batch_descriptor else None,
-                    "uniform_decode": fc.batch_descriptor.uniform_decode if fc.batch_descriptor else None,
-                    "cudagraph_runtime_mode": str(fc.cudagraph_runtime_mode),
-                }
-                meta_summary = _summarize_attn_metadata(attn_metadata) if attn_metadata is not None else {"attn_metadata": None}
-                logger.info("[FC DEBUG] forward_context=%s attn_metadata=%s", ctx_summary, meta_summary)
-            except Exception as _e:
-                logger.debug("[FC DEBUG] summary failed: %s", _e)
             model_output = self._model_forward(
                 input_ids=input_ids,
                 positions=positions,
@@ -3467,53 +3419,6 @@ class GPUModelRunner(LoRAModelRunnerMixin, KVConnectorModelRunnerMixin):
                     ubatch_slices=ubatch_slices,
                 ),
             ):
-                # Debug print: summarize forward context and attention metadata (dummy run)
-                try:
-                    from vllm.forward_context import get_forward_context
-                    fc = get_forward_context()
-                    def _summarize_attn_metadata(meta: Any) -> dict[str, Any]:
-                        def one(m: Any) -> dict[str, Any]:
-                            out = {}
-                            for name in (
-                                "num_actual_tokens",
-                                "max_query_len",
-                                "max_seq_len",
-                                "use_cascade",
-                                "common_prefix_len",
-                            ):
-                                if hasattr(m, name):
-                                    out[name] = getattr(m, name)
-                            for tname in (
-                                "query_start_loc",
-                                "seq_lens",
-                                "block_table",
-                                "slot_mapping",
-                                "cu_prefix_query_lens",
-                                "prefix_kv_lens",
-                                "suffix_kv_lens",
-                            ):
-                                if hasattr(m, tname) and getattr(m, tname) is not None:
-                                    t = getattr(m, tname)
-                                    out[f"{tname}.shape"] = tuple(t.shape)
-                                    out[f"{tname}.dtype"] = str(t.dtype)
-                                    out[f"{tname}.device"] = str(t.device)
-                            return out
-                        if isinstance(meta, dict):
-                            return {k: one(v) for k, v in meta.items()}
-                        elif isinstance(meta, list):
-                            return {f"ubatch_{i}": _summarize_attn_metadata(v) for i, v in enumerate(meta)}
-                        else:
-                            return {"single": one(meta)}
-
-                    ctx_summary = {
-                        "num_tokens": fc.batch_descriptor.num_tokens if fc.batch_descriptor else None,
-                        "uniform_decode": fc.batch_descriptor.uniform_decode if fc.batch_descriptor else None,
-                        "cudagraph_runtime_mode": str(fc.cudagraph_runtime_mode),
-                    }
-                    meta_summary = _summarize_attn_metadata(attn_metadata) if attn_metadata is not None else {"attn_metadata": None}
-                    logger.info("[FC DEBUG] (dummy) forward_context=%s attn_metadata=%s", ctx_summary, meta_summary)
-                except Exception as _e:
-                    logger.debug("[FC DEBUG] (dummy) summary failed: %s", _e)
                 outputs = self.model(
                     input_ids=input_ids,
                     positions=positions,
